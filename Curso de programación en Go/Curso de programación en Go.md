@@ -121,7 +121,7 @@ func main() {
 
 
 
-## Swith 
+## Switch 
 
 ```go
 switch operador {
@@ -383,5 +383,74 @@ func main() {
 	bCovi := bird{}
 	moveAnimal(bCovi)
 }
+```
+
+
+
+## Imprimiendo el contenido de una Página Web usando Interfaces
+
+```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+)
+
+type webWriter struct{}
+
+func (webWriter) Write(p []byte) (int, error) {
+	fmt.Println(string(p))
+	return len(p), nil
+}
+
+func main() {
+	response, error := http.Get("http://google.com")
+	webW := webWriter{}
+	if error != nil {
+		fmt.Println(error)
+	}
+	io.Copy(webW, response.Body)
+}
+```
+
+
+
+## Introducción al problema de la concurrencia  
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+)
+
+func checkServer(server string) {
+	_, error := http.Get(server)
+	if error != nil {
+		fmt.Printf(server, "is not working :(\n")
+	} else {
+		fmt.Printf(server, "is working :)\n")
+	}
+}
+
+func main() {
+	startTime := time.Now()
+	servers := []string{
+		"http://google.com",
+		"http://twitter.com",
+		"http://github.com",
+		"http://youtube.com",
+	}
+	for _, server := range servers {
+		checkServer(server)
+	}
+	diffTime := time.Since(startTime)
+	fmt.Println(diffTime)
+}
+
 ```
 
