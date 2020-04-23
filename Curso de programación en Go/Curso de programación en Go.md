@@ -454,3 +454,206 @@ func main() {
 
 ```
 
+
+
+## Goroutunes y channels 
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+)
+
+func checkServer(server string, channel chan string) {
+	_, error := http.Get(server)
+	if error != nil {
+		fmt.Printf(server, "is not working :(\n")
+		channel <- server + "is not working :(\n"
+	} else {
+		fmt.Printf(server, "is working :)\n")
+		channel <- server + "is working :)\n" // forma de enviar al canal
+	}
+}
+
+func main() {
+	startTime := time.Now()
+	channel := make(chan string)
+	servers := []string{
+		"http://google.com",
+		"http://twitter.com",
+		"http://github.com",
+		"http://youtube.com",
+	}
+	for _, server := range servers {
+		go checkServer(server, channel) // Este código se ejecutará concurrentemente 
+	}
+	for i := 0; i < len(servers); i++ {
+		fmt.Println(<-channel) // Necesario para mantener un canal de comunicación entre las goroutines y el hilo principal (main)
+	}
+	diffTime := time.Since(startTime)
+	fmt.Println(diffTime)
+}
+
+```
+
+
+
+## Ciclos while en go
+
+```go
+	counter := 0
+	for {
+		if counter > 5 {
+			break
+		}
+		for _, server := range servers {
+			go checkServer(server, channel)
+		}
+		time.Sleep(5 * time.Second) // duerme 5 segundos
+		counter++
+	}
+```
+
+
+
+## Creando el servidor y manejando rutas en backend
+
+> file: main.go
+
+```go
+package main
+
+func main() {
+	myServer := newServer(":3000")
+	myServer.listen()
+}
+```
+
+> file: server.go
+
+```go
+package main
+
+import "net/http"
+
+/**
+	Crea una conexión y escucha
+ */
+type Server struct {
+	port   string
+	router *Router
+}
+
+func newServer(port string) *Server {
+	return &Server{
+		port:   port,
+		router: newRouter(),
+	}
+}
+
+func (s *Server) listen() error {
+	http.Handle("/", s.router) // [3]
+	error := http.ListenAndServe(s.port, nil)
+	if error != nil {
+		return error
+	}
+	return nil
+}
+```
+
+> file: router.go
+>
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+/**
+	Maneja las URLs que nos llegan
+ */
+type Router struct {
+	rules map[string]http.HandlerFunc // cada string (url) le asociamos un Handler [1]
+}
+
+func newRouter() *Router {
+	return &Router{
+		rules: make(map[string]http.HandlerFunc),
+	}
+}
+
+func (r *Router) ServeHTTP(w http.ResponseWriter, responde *http.Request) {
+	fmt.Fprintln(w, "Hello World!") // el primer parámetro es dónde se va escribir y el segundo qué
+}
+```
+
+
+
+[1]
+
+## type [HandlerFunc](https://golang.org/src/net/http/server.go?s=61706:61753#L1998)
+
+The HandlerFunc type is an adapter to allow the use of ordinary functions as HTTP handlers. If f is a function with the appropriate signature, HandlerFunc(f) is a Handler[2] that calls f.
+
+```go
+type HandlerFunc func(ResponseWriter, *Request)
+```
+
+
+
+[2]
+
+## type [Handler](https://golang.org/src/net/http/server.go?s=2756:2819#L76)
+
+A Handler responds to an HTTP request.
+
+ServeHTTP should write reply headers and data to the ResponseWriter and then return. Returning signals that the request is finished; it is not valid to use the ResponseWriter or read from the Request.Body after or concurrently with the completion of the ServeHTTP call.
+
+Depending on the HTTP client software, HTTP protocol version, and any intermediaries between the client and the Go server, it may not be possible to read from the Request.Body after writing to the ResponseWriter. Cautious handlers should read the Request.Body first, and then reply.
+
+Except for reading the body, handlers should not modify the provided Request.
+
+If ServeHTTP panics, the server (the caller of ServeHTTP) assumes that the effect of the panic was isolated to the active request. It recovers the panic, logs a stack trace to the server error log, and either closes the network connection or sends an HTTP/2 RST_STREAM, depending on the HTTP protocol. To abort a handler so the client sees an interrupted response but the server doesn't log an error, panic with the value ErrAbortHandler.
+
+```go
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)
+}
+```
+
+ 
+
+[3]
+
+## func [Handle](https://golang.org/pkg/net/http/#Handle)
+
+```
+func Handle(pattern string, handler Handler)
+```
+
+Handle registers the handler for the given pattern in the DefaultServeMux. The documentation for ServeMux explains how patterns are matched.
+
+
+
+## Middleware
+
+Middleware es una abstraccion de las rutas con las solicitudes del usuario.
+
+![](/Users/supersu/MEGA/Notes/Cursos/Imágenes/4.png)
+
+## Manejando request HTTP
+
+```go
+// Buscamos que el path existe, es decir, tiene un Handler asociado. Lo cual nos permitirá hacer operaciones con éste
+func (r *Router) FindHandler(path string) (http.HandlerFunc, bool){
+	handler, error := r.rules[path]
+	return handler, error
+}
+```
+
