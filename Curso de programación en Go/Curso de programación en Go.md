@@ -657,3 +657,197 @@ func (r *Router) FindHandler(path string) (http.HandlerFunc, bool){
 }
 ```
 
+
+
+## Asignando las rutas HTTP 
+
+> file: router.go
+
+```go
+func (r *Router) ServeHTTP(w http.ResponseWriter, responde *http.Request) {
+	handler, exist := r.FindHandler(responde.URL.Path)
+	if !exist{
+		w.WriteHeader(http.StatusNotFound)
+	}else{
+		handler(w, responde)
+	}
+}
+```
+
+> file: server.go
+
+```go
+func (s *Server) setHandler(path string, handle http.HandlerFunc){
+   s.router.rules[path] = handle
+}
+```
+
+> file: handlers.go
+
+```go
+func HandlerRoot(w http.ResponseWriter, r *http.Request) {
+   fmt.Fprintln(w, "Hello World!")
+}
+
+func HandlerAPI(w http.ResponseWriter, r *http.Request){
+   fmt.Fprintln(w, "I am an API")
+}
+```
+
+> file: main.go
+
+```go
+myServer := newServer(":3000")
+myServer.setHandler("/", HandlerRoot)
+myServer.setHandler("/api", HandlerAPI)
+myServer.listen()
+```
+
+En el main nos encargamos de asignar qué ruta, va con qué Handler. Para ello introducimos en el `rules` de `Router` cada item (`string=path, http.HandlerFunc`). 
+
+El método `setHandler` se encarga de vincular cada path con su respectivo Handler. Los Handlers están en el fichero `handlers.go`. 
+
+El método `ServeHTTP` de `Router` es el engargado de llamar al respectivo Handle, en función del `Path` del Request.
+
+
+
+## Middleware
+
+```go
+File: main.go
+package main
+
+import (
+  "log"
+  "net/http"
+)
+
+func middlewareOne(next http.Handler) http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    log.Println("Executing middlewareOne")
+    next.ServeHTTP(w, r)
+    log.Println("Executing middlewareOne again")
+  })
+}
+
+func middlewareTwo(next http.Handler) http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    log.Println("Executing middlewareTwo")
+    if r.URL.Path != "/" {
+      return
+    }
+    next.ServeHTTP(w, r)
+    log.Println("Executing middlewareTwo again")
+  })
+}
+
+func final(w http.ResponseWriter, r *http.Request) {
+  log.Println("Executing finalHandler")
+  w.Write([]byte("OK"))
+}
+
+func main() {
+  finalHandler := http.HandlerFunc(final)
+
+  http.Handle("/", middlewareOne(middlewareTwo(finalHandler)))
+  http.ListenAndServe(":3000", nil)
+}
+```
+
+```bash
+$ go run main.go
+2014/10/13 20:27:36 Executing middlewareOne
+2014/10/13 20:27:36 Executing middlewareTwo
+2014/10/13 20:27:36 Executing finalHandler
+2014/10/13 20:27:36 Executing middlewareTwo again
+2014/10/13 20:27:36 Executing middlewareOne again
+```
+
+[Fuente](https://www.alexedwards.net/blog/making-and-using-middleware) 
+
+
+
+### Agregando múltiples middlewares
+
+Un Middleware recibe un Handler, el Handler que tiene que llamar después, es decir, el que se encuentra después de que el Middleware realice sus operaciones, y devuelve otro Handler: un Handler que ya sí llama al Handler final (en nuestro ejemplo a `HandlerAPI`)
+
+```go
+File: types.go
+package main
+
+import "net/http"
+
+type Middleware func(http.HandlerFunc) http.HandlerFunc
+```
+
+```go
+File: middlewares.go
+package main
+
+import (
+   "fmt"
+   "net/http"
+)
+
+func checkAuth() Middleware{
+   return func(f http.HandlerFunc) http.HandlerFunc{
+      return func (w http.ResponseWriter, r *http.Request){
+         flag := true
+         fmt.Println("Checking authentication")
+         if flag{
+            f(w,r)
+         }else{
+            return
+         }
+      }
+   }
+}
+```
+
+```go
+File: server.go
+func (s *Server) addMiddleware(f http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc{
+   for _, middleware := range middlewares{
+      f = middleware(f)
+   }
+   return f
+}
+```
+
+```go
+File: main.go
+package main
+
+func main() {
+   myServer := newServer(":3000")
+   myServer.setHandler("/", HandlerRoot)
+   myServer.setHandler("/api", myServer.addMiddleware(HandlerAPI, checkAuth()))
+   myServer.listen()
+}
+```
+
+![](/Users/supersu/MEGA/Notes/Cursos/Imágenes/6.jpg)
+
+El middleware `checkAuth` se situará entre el Request y el `HandlerAPI`, con el propósito de checkear (en este caso hace una simulación) si el usuario está logeado. 
+
+En la entrada de nuestro programa, en el `main.go`, añadimos un handler a nuestros Server, `myServer`, con `setHandler`. Ahora, como Handler vamos a llamar antes a `addMiddleware`, que hará el recorrido que se muestra en la imagen de arriba. 
+
+
+
+### Agregando otro middleware
+
+```go
+File: middlewares.go
+func Loggin() Middleware{
+   return func(f http.HandlerFunc) http.HandlerFunc{
+      return func(w http.ResponseWriter, r *http.Request){
+         start := time.Now()
+         defer func(){
+            log.Println(r.URL.Path, time.Since(start)) // añade la fecha en la impresión
+         }()
+         f(w,r)
+      }
+   }
+}
+```
+
