@@ -647,7 +647,7 @@ Handle registers the handler for the given pattern in the DefaultServeMux. The d
 
 Middleware es una abstraccion de las rutas con las solicitudes del usuario.
 
-![](Imágenes/4.png)
+![](images/4.png)
 
 ## Manejando request HTTP
 
@@ -828,7 +828,7 @@ func main() {
 }
 ```
 
-![](Imágenes/6.jpg)
+![](images/6.jpg)
 
 El middleware `checkAuth` se situará entre el Request y el `HandlerAPI`, con el propósito de checkear (en este caso hace una simulación) si el usuario está logeado. 
 
@@ -938,7 +938,7 @@ func PostRequest(w http.ResponseWriter, r *http.Request){
 }
 ```
 
-![](Imágenes/5.png)
+![](images/5.png)
 
 
 
@@ -978,7 +978,7 @@ func (u *User) toJSON() ([]byte, error){
 }
 ```
 
-![](Imágenes/7.png)
+![](images/7.png)
 
 
 
