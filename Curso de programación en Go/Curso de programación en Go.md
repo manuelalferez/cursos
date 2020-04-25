@@ -1,5 +1,7 @@
 # Go
 
+[Info](https://es.wikipedia.org/wiki/Go_(lenguaje_de_programaci%C3%B3n))
+
 ## Primer programa en Go
 
 ```go
@@ -645,7 +647,7 @@ Handle registers the handler for the given pattern in the DefaultServeMux. The d
 
 Middleware es una abstraccion de las rutas con las solicitudes del usuario.
 
-![](/Users/supersu/MEGA/Notes/Cursos/Imágenes/4.png)
+![](Imágenes/4.png)
 
 ## Manejando request HTTP
 
@@ -826,7 +828,7 @@ func main() {
 }
 ```
 
-![](/Users/supersu/MEGA/Notes/Cursos/Imágenes/6.jpg)
+![](Imágenes/6.jpg)
 
 El middleware `checkAuth` se situará entre el Request y el `HandlerAPI`, con el propósito de checkear (en este caso hace una simulación) si el usuario está logeado. 
 
@@ -850,4 +852,163 @@ func Loggin() Middleware{
    }
 }
 ```
+
+
+
+## Manejando distintas peticiones, POST
+
+```go
+File: router.go
+package main
+
+import (
+   "net/http"
+)
+
+/**
+   Maneja las URLs que nos llegan
+ */
+type Router struct {
+   rules map[string]map[string]http.HandlerFunc
+}
+
+func newRouter() *Router {
+   return &Router{
+      rules: make(map[string]map[string]http.HandlerFunc),
+   }
+}
+
+func (r *Router) FindHandler(path string, method string) (http.HandlerFunc, bool, bool){
+   _, pathExist := r.rules[path]
+   handler, methodExist := r.rules[path][method]
+   return handler, methodExist, pathExist
+}
+
+func (r *Router) ServeHTTP(w http.ResponseWriter, response *http.Request) {
+   handler, methodExist, pathExist := r.FindHandler(response.URL.Path, response.Method)
+   if !pathExist{
+      w.WriteHeader(http.StatusNotFound)
+   }else if !methodExist{
+      w.WriteHeader(http.StatusMethodNotAllowed)
+   }else{
+      handler(w, response)
+   }
+}
+```
+
+```go
+File: server.go
+func (s *Server) setHandler(method string, path string, handle http.HandlerFunc){
+   _, pathExist:= s.router.rules[path]
+   if !pathExist{
+      s.router.rules[path] = make(map[string]http.HandlerFunc)
+   }
+   s.router.rules[path][method] = handle
+}
+```
+
+```go
+File: main.go
+func main() {
+   myServer := newServer(":3000")
+   myServer.setHandler("GET", "/", HandlerRoot)
+   myServer.setHandler("POST", "/api", myServer.addMiddleware(HandlerAPI, checkAuth(), Loggin()))
+   myServer.listen()
+}
+```
+
+Apoyándonos en [Postman](https://chrome.google.com/webstore/detail/postman/fhbjgbiflinjbdggehcddcbncdddomop?hl=es-419) para hacer las distintas peticiones
+
+
+
+## Post Request con JSON
+
+```go
+File: handlers.go
+func PostRequest(w http.ResponseWriter, r *http.Request){
+   decoder := json.NewDecoder(r.Body)
+   var metaData MetaData
+   error := decoder.Decode(&metaData)
+   if error != nil {
+      fmt.Fprintf(w, "error: %v", error)
+      return
+   }else{
+      fmt.Fprintf(w, "Payload: %v", metaData)
+   }
+}
+```
+
+![](Imágenes/5.png)
+
+
+
+## Respondiendo al Resquest JSON
+
+```go
+File: handlers.go
+func UserPostRequest(w http.ResponseWriter, r *http.Request){
+   decoder := json.NewDecoder(r.Body)
+   var user User
+   error := decoder.Decode(&user)
+   if error != nil {
+      fmt.Fprintf(w, "error: %v", error)
+      return
+   }else{
+      response, error := user.toJSON()
+      if error != nil{
+         w.WriteHeader(http.StatusInternalServerError)
+         return
+      }
+      w.Header().Set("Content-Type", "application/json")
+      w.Write(response)
+   }
+}
+```
+
+```go
+File: types.go
+type User struct {
+   Name  string `json:"name"`
+   Email string `json:"email"`
+   Phone string `json:"phone"`
+}
+
+func (u *User) toJSON() ([]byte, error){
+   return json.Marshal(u) // nos convierte el struct en JSON (atributos)
+}
+```
+
+![](Imágenes/7.png)
+
+
+
+## Crear un módulo en go 
+
+```bash
+git mod init [respotiry-url]
+```
+
+
+
+## Incluyendo los mods 
+
+En la terminal:
+
+````bash
+go mod init [name-mod]
+````
+
+En el archivo `go.mod`:
+
+```go
+requiere [repository-url] [version]
+```
+
+En nuestro `main.go`: 
+
+```go
+import "[repository-url]"
+```
+
+
 
